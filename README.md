@@ -22,6 +22,6 @@ Compare similarity of image files.
 
 ## dependencies
 * ImageMagick 7 (including libraries)
-* C99 compiler
+* gcc
 * make
 * pkg-config

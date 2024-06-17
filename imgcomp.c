@@ -106,11 +106,19 @@ int main(int argc, char **argv)
 		if (head == NULL)
 		{
 			hashes = (hashf *) malloc(sizeof(*hashes));
+			if (!hashes) {
+				fprintf(stderr, "ERROR: Failed to allocate memory.\n");
+				return -1;
+			}
 			head = hashes;
 		}
 		else
 		{
 			hashes->next = (hashf *) malloc(sizeof(*hashes));
+			if (!hashes->next) {
+				fprintf(stderr, "ERROR: Failed to allocate memory.\n");
+				return -1;
+			}
 			hashes = hashes->next;
 		}
 

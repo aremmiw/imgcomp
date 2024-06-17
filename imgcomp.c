@@ -92,7 +92,6 @@ int main(int argc, char **argv)
 
 	for (int findex = 0; findex < files; findex++)
 	{
-
 		if (strlen(argv[findex + optind]) > FILENAME_MAX) {
 			continue;
 		}
@@ -128,12 +127,11 @@ int main(int argc, char **argv)
 		if (print_hashes) {
 			printf("%s: %.*lx\n", hashes->filename, HASHLENGTH / 4, hashes->hash);
 		}
-
 	}
 
 	hashes = head;
 
-	while(hashes->next != NULL)
+	while(hashes != NULL)
 	{
 		hashf *x = hashes;
 		hashf *y = x->next;

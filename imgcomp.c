@@ -6,10 +6,11 @@
 #include <math.h>
 #include <getopt.h>
 
-#include <MagickWand/MagickWand.h>
-
-#ifndef __has_builtin
-  #define __has_builtin(x) 0
+#if __has_include(<MagickWand/MagickWand.h>)
+	#include <MagickWand/MagickWand.h>
+#elif __has_include(<wand/MagickWand.h>)
+	#include <wand/MagickWand.h>
+	#define LEGACY_MAGICKWAND 1
 #endif
 
 #define PROGRAM_NAME "imgcomp"
@@ -110,6 +111,7 @@ int main(int argc, char **argv)
 				return -1;
 			}
 			head = hashes;
+			hashes->next = NULL;
 		}
 		else
 		{
@@ -119,6 +121,7 @@ int main(int argc, char **argv)
 				return -1;
 			}
 			hashes = hashes->next;
+			hashes->next = NULL;
 		}
 
 		strcpy(hashes->filename, argv[findex + optind]);
@@ -211,7 +214,11 @@ void ahash(MagickWand **mw, uint64_t *hash)
 	uint64_t avg = 0;
 	uint32_t outpixels[64];
 
-	MagickResizeImage(*mw, 8, 8, SCALER);
+	#ifndef LEGACY_MAGICKWAND
+		MagickResizeImage(*mw, 8, 8, SCALER);
+	#else
+		MagickResizeImage(*mw, 8, 8, SCALER, 1);
+	#endif
 	MagickExportImagePixels(*mw, 0, 0, 8, 8, "I", LongPixel, outpixels);
 
 	/* First pass, get avg colour */
@@ -236,7 +243,11 @@ void dhash(MagickWand **mw, uint64_t *hash)
 
 	uint32_t outpixels[72];
 
-	MagickResizeImage(*mw, 9, 8, SCALER);
+	#ifndef LEGACY_MAGICKWAND
+		MagickResizeImage(*mw, 9, 8, SCALER);
+	#else
+		MagickResizeImage(*mw, 9, 8, SCALER, 1);
+	#endif
 	MagickExportImagePixels(*mw, 0, 0, 9, 8, "I", LongPixel, outpixels);
 
 	/* Rightmost pixel column is not part of the hash */
@@ -261,7 +272,11 @@ void phash(MagickWand **mw, uint64_t *hash)
 	double dct[64];
 	double dctsum;
 
-	MagickResizeImage(*mw, 32, 32, SCALER);
+	#ifndef LEGACY_MAGICKWAND
+		MagickResizeImage(*mw, 32, 32, SCALER);
+	#else
+		MagickResizeImage(*mw, 32, 32, SCALER, 1);
+	#endif
 	MagickExportImagePixels(*mw, 0, 0, 32, 32, "I", LongPixel, outpixels);
 
 	/* Compute the DCT (only the top left 8x8) */

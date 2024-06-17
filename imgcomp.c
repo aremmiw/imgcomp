@@ -23,6 +23,7 @@ typedef struct hashf
 {
 	uint64_t hash;
 	char filename[FILENAME_MAX];
+	struct hashf *next;
 } hashf;
 
 void usage(void);
@@ -40,7 +41,8 @@ char *extensions[] = {".jpeg", ".jpg", ".png", ".gif", ".tiff", ".tif", ".webp",
 
 int main(int argc, char **argv)
 {
-	hashf *hashes;
+	hashf *hashes = NULL;
+	hashf *head = NULL;
 	int files, optc;
 	int hash_algorithm = DHASH;
 	bool print_hashes = false;
@@ -87,39 +89,58 @@ int main(int argc, char **argv)
 		usage();
 	}
 
-	hashes = malloc(files * sizeof(*hashes));
 
 	for (int findex = 0; findex < files; findex++)
 	{
-		hashes[findex].hash = gethash(argv[findex + optind], hash_algorithm);
+
 		if (strlen(argv[findex + optind]) > FILENAME_MAX) {
 			continue;
 		}
 
-		strcpy(hashes[findex].filename, argv[findex + optind]);
+		uint64_t hash = gethash(argv[findex + optind], hash_algorithm);
 
-		/* Hashes of ~0 are not possible */
-		if (print_hashes && hashes[findex].hash != 0xFFFFFFFFFFFFFFFF) {
-			printf("%s: %.*lx\n", hashes[findex].filename, HASHLENGTH / 4, hashes[findex].hash);
+		if (hash == 0xFFFFFFFFFFFFFFFF) {
+			continue;
 		}
+
+		if (head == NULL)
+		{
+			hashes = (hashf *) malloc(sizeof(*hashes));
+			head = hashes;
+		}
+		else
+		{
+			hashes->next = (hashf *) malloc(sizeof(*hashes));
+			hashes = hashes->next;
+		}
+
+		strcpy(hashes->filename, argv[findex + optind]);
+		hashes->hash = hash;
+
+		if (print_hashes) {
+			printf("%s: %.*lx\n", hashes->filename, HASHLENGTH / 4, hashes->hash);
+		}
+
 	}
 
-	for (int x = 0; x < files ; x++)
-	{
-		for (int y = x + 1; y < files; y++)
-		{
-			if (hashes[x].hash == 0xFFFFFFFFFFFFFFFF || hashes[y].hash == 0xFFFFFFFFFFFFFFFF) {
-				break;
-			}
+	hashes = head;
 
-			int hashdist = hammdist(hashes[x].hash, hashes[y].hash);
+	while(hashes->next != NULL)
+	{
+		hashf *x = hashes;
+		hashf *y = x->next;
+		while (y != NULL)
+		{
+			int hashdist = hammdist(x->hash, y->hash);
 			if (hashdist < 5) {
 				printf("%s and %s are similar with a dist of %d\n",
-				hashes[x].filename, hashes[y].filename, hashdist);
+				x->filename, y->filename, hashdist);
 			}
+			y = y->next;
 		}
+		hashes = hashes->next;
+		free(x);
 	}
-	free(hashes);
 
 	return 0;
 }

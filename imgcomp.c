@@ -45,6 +45,7 @@ int main(int argc, char **argv)
 	hashf *hashes = NULL;
 	hashf *head = NULL;
 	int files, optc;
+	int tolerance = 5;
 	int hash_algorithm = DHASH;
 	bool print_hashes = false;
 
@@ -54,11 +55,12 @@ int main(int argc, char **argv)
 		{"dhash", no_argument, NULL, 'd'},
 		{"phash", no_argument, NULL, 'p'},
 		{"show-hashes", no_argument, NULL, 's'},
+		{"tolerance", required_argument, NULL, 't'},
 		{"help", no_argument, NULL, 'h'},
 		{NULL, 0, NULL, 0}
 	};
 
-	while ((optc = getopt_long(argc, argv, "adpsh", longopts, NULL)) != -1)
+	while ((optc = getopt_long(argc, argv, "adpst:h", longopts, NULL)) != -1)
 	{
 		switch (optc)
 		{
@@ -73,6 +75,13 @@ int main(int argc, char **argv)
 				break;
 			case 's':
 				print_hashes = true;
+				break;
+			case 't':
+				tolerance = atoi(optarg);
+				if (strlen(optarg) != floor(log10(abs(tolerance + 1))) + 1 || 0 > tolerance || tolerance > 64) {
+					fprintf(stderr, "Invalid use of --tolerance, run '%s --help' for usage info.\n", PROGRAM_NAME);
+					exit(1);
+				}
 				break;
 			case 'h':
 				usage();
@@ -141,7 +150,7 @@ int main(int argc, char **argv)
 		while (y != NULL)
 		{
 			int hashdist = hammdist(x->hash, y->hash);
-			if (hashdist < 5) {
+			if (hashdist < tolerance) {
 				printf("%s and %s are similar with a dist of %d\n",
 				x->filename, y->filename, hashdist);
 			}
@@ -158,11 +167,15 @@ void usage(void)
 {
 	printf("Usage: %s [OPTION]... FILES...\n", PROGRAM_NAME);
 	puts(	"Compare similarity of image files.\n\n"
-		"  Hashing algorithms:\n"
+		"Hashing algorithms:\n"
 		"  -a, --ahash		use aHash (average hash)\n"
 		"  -d, --dhash		use dHash [DEFAULT]\n"
 		"  -p, --phash		use pHash (perceptive hash)\n\n"
+		"Other options:\n"
 		"  -s, --show-hashes	print calculated hashes of all files\n"
+		"  -t, --tolerance=NUM	control how similar images must be to be considered\n"
+		"			 'similar'. parameter NUM is an integer from\n"
+		"			 0 (identical) to 64 (very different). defaults to 5\n"
 		"  -h, --help		print this help");
 	exit(0);
 }

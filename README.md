@@ -11,12 +11,16 @@ Duplicates are found using a Hamming distance.
 Usage: imgcomp [OPTION]... FILES...
 Compare similarity of image files.
 
-  Hashing algorithms:
+Hashing algorithms:
   -a, --ahash		use aHash (average hash)
   -d, --dhash		use dHash [DEFAULT]
   -p, --phash		use pHash (perceptive hash)
 
+Other options:
   -s, --show-hashes	print calculated hashes of all files
+  -t, --tolerance=NUM	control how similar images must be to be considered
+			 'similar'. parameter NUM is an integer from
+			 0 (identical) to 64 (very different). defaults to 5
   -h, --help		print this help
 ```
 

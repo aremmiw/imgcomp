@@ -78,7 +78,8 @@ int main(int argc, char **argv)
 				break;
 			case 't':
 				tolerance = atoi(optarg);
-				if (strlen(optarg) != floor(log10(abs(tolerance + 1))) + 1 || 0 > tolerance || tolerance > 64) {
+				if (tolerance != 0 && (0 > tolerance || tolerance > 64 || strlen(optarg) != floor(log10(abs(tolerance))) + 1))
+				{
 					fprintf(stderr, "Invalid use of --tolerance, run '%s --help' for usage info.\n", PROGRAM_NAME);
 					exit(1);
 				}

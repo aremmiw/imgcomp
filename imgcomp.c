@@ -161,7 +161,8 @@ int main(int argc, char **argv)
 
 		if (stat(argv[findex + optind], &stat_buf) == -1
 		    || (stat_buf.st_mode & S_IFMT) != S_IFREG
-		    || strlen(argv[findex + optind]) > PATH_MAX) {
+		    || strlen(argv[findex + optind]) > PATH_MAX
+		    || !check_extension(argv[findex + optind])) {
 			continue;
 		}
 
@@ -298,7 +299,7 @@ uint64_t gethash(char *filename, int hash_algorithm)
 	MagickWandGenesis();
 	mw = NewMagickWand();
 
-	if (!check_extension(filename) || !MagickReadImage(mw,filename))
+	if (!MagickReadImage(mw,filename))
 	{
 		if (mw) {
 			mw = DestroyMagickWand(mw);

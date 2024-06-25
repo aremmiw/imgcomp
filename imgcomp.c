@@ -134,7 +134,7 @@ int main(int argc, char **argv)
 			hashes->next = NULL;
 		}
 
-		strcpy(hashes->filename, argv[findex + optind]);
+		strncpy(hashes->filename, argv[findex + optind], FILENAME_MAX - 1);
 		hashes->hash = hash;
 
 		if (print_hashes) {

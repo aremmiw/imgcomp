@@ -7,7 +7,10 @@ and to find duplicates (which can be deleted to save space).
 Duplicates are found using a Hamming distance.
 
 Calculated hashes are stored in an SQLite database file in `$HOME/.cache/imgcomp.sqlite` or `$XDG_CACHE_HOME/imgcomp.sqlite` if `$XDG_CACHE_HOME` is defined.  
-If an images mtime and filesize are unchanged and there exists a hash for the chosen hashing algorithm, then it will use the precalculated hash. This saves a significant amount of time for repeated uses of imgcomp.
+If an images mtime and filesize are unchanged and there exists a hash for the chosen hashing algorithm, then it will use the precalculated hash.
+This saves a significant amount of time for repeated uses of imgcomp.
+
+Only GNU/Linux is supported although *BSD will likely work.
 
 ## usage
 ```

@@ -118,7 +118,7 @@ int main(int argc, char **argv)
 			hashes = (hashf *) malloc(sizeof(*hashes));
 			if (!hashes) {
 				fprintf(stderr, "ERROR: Failed to allocate memory.\n");
-				return -1;
+				exit(1);
 			}
 			head = hashes;
 			hashes->next = NULL;
@@ -128,7 +128,7 @@ int main(int argc, char **argv)
 			hashes->next = (hashf *) malloc(sizeof(*hashes));
 			if (!hashes->next) {
 				fprintf(stderr, "ERROR: Failed to allocate memory.\n");
-				return -1;
+				exit(1);
 			}
 			hashes = hashes->next;
 			hashes->next = NULL;

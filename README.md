@@ -6,6 +6,9 @@ The main use of this program is to find images that are similar to one another,
 and to find duplicates (which can be deleted to save space).
 Duplicates are found using a Hamming distance.
 
+Calculated hashes are stored in an SQLite database file in `$HOME/.cache/imgcomp.sqlite` or `$XDG_CACHE_HOME/imgcomp.sqlite` if `$XDG_CACHE_HOME` is defined.  
+If an images mtime and filesize are unchanged and there exists a hash for the chosen hashing algorithm, then it will use the precalculated hash. This saves a significant amount of time for repeated uses of imgcomp.
+
 ## usage
 ```
 Usage: imgcomp [OPTION]... FILES...
@@ -26,6 +29,7 @@ Other options:
 
 ## dependencies
 * ImageMagick 6 or 7 (including libraries)
+* sqlite3
 * gcc
 * make
 * pkg-config

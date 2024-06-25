@@ -3,8 +3,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <sys/stat.h>
 #include <math.h>
 #include <getopt.h>
+
+#include <sqlite3.h>
 
 #if __has_include(<MagickWand/MagickWand.h>)
 	#include <MagickWand/MagickWand.h>
@@ -23,7 +27,7 @@
 typedef struct hashf
 {
 	uint64_t hash;
-	char filename[FILENAME_MAX];
+	char filename[PATH_MAX];
 	struct hashf *next;
 } hashf;
 
@@ -48,6 +52,8 @@ int main(int argc, char **argv)
 	int tolerance = 5;
 	int hash_algorithm = DHASH;
 	bool print_hashes = false;
+	char dbpath[PATH_MAX];
+	sqlite3 *db;
 
 	static struct option const longopts[] =
 	{
@@ -100,14 +106,109 @@ int main(int argc, char **argv)
 		usage();
 	}
 
+	if (getenv("XDG_CACHE_HOME")) {
+		strncpy(dbpath, getenv("XDG_CACHE_HOME"), PATH_MAX - 25);
+	}
+	else if (getenv("HOME"))
+	{
+		strncpy(dbpath, getenv("HOME"), PATH_MAX - 25);
+		strcat(dbpath, "/.cache");
+	}
+	else
+	{
+		fprintf(stderr, "Check that $HOME or $XDG_CACHE_HOME is set\n");
+		exit(1);
+	}
+
+	strcat(dbpath, "/" PROGRAM_NAME ".sqlite");
+
+	if (sqlite3_open(dbpath, &db) != SQLITE_OK)
+	{
+		fprintf(stderr, "Failed to open the database file: %s\n", sqlite3_errmsg(db));
+		sqlite3_close(db);
+		exit(1);
+	}
+	else
+	{
+		char *init_db = "CREATE TABLE IF NOT EXISTS hashes(id INTEGER PRIMARY KEY, filename TEXT, hashtype INT, hash TEXT, filesize INT, mtime INT);";
+		char *errmsg = NULL;
+
+		if (sqlite3_exec(db, init_db, 0, 0, &errmsg) != SQLITE_OK)
+		{
+			fprintf(stderr, "SQL error: %s\n", errmsg);
+			sqlite3_free(errmsg);
+			sqlite3_close(db);
+			exit(1);
+		}
+		else
+		{
+			sqlite3_exec(db, "PRAGMA synchronous = OFF;", 0, 0, &errmsg);
+			sqlite3_exec(db, "PRAGMA journal_mode = MEMORY;", 0, 0, &errmsg);
+		}
+	}
+
+	sqlite3_stmt *insert_stmt, *select_stmt, *update_stmt;
+	sqlite3_prepare_v2(db, "INSERT INTO hashes (id, filename, hashtype, hash, filesize, mtime) VALUES(NULL, ?1, ?2, ?3, ?4, ?5);", -1, &insert_stmt, 0);
+	sqlite3_prepare_v2(db, "SELECT hash, mtime, filesize FROM hashes WHERE filename=?1 AND hashtype=?2", -1, &select_stmt, 0);
+	sqlite3_prepare_v2(db, "UPDATE hashes SET hash=?1, filesize=?2, mtime=?3 WHERE filename=?4 AND hashtype=?5;", -1, &update_stmt, 0);
 
 	for (int findex = 0; findex < files; findex++)
 	{
-		if (strlen(argv[findex + optind]) > FILENAME_MAX) {
+		char hash_buffer[17] = {0};
+		uint64_t hash;
+		int select_status;
+		struct stat stat_buf;
+
+		if (stat(argv[findex + optind], &stat_buf) == -1
+		    || (stat_buf.st_mode & S_IFMT) != S_IFREG
+		    || strlen(argv[findex + optind]) > PATH_MAX) {
 			continue;
 		}
 
-		uint64_t hash = gethash(argv[findex + optind], hash_algorithm);
+		char *real_filepath = realpath(argv[findex + optind], NULL);
+
+		sqlite3_bind_text(select_stmt, 1, real_filepath, -1, SQLITE_STATIC);
+		sqlite3_bind_int(select_stmt, 2, hash_algorithm);
+
+		select_status = sqlite3_step(select_stmt);
+
+		if (select_status == SQLITE_ROW
+		    && (int64_t) strtoul((char *) sqlite3_column_text(select_stmt, 1), NULL, 10) == stat_buf.st_mtim.tv_sec
+		    && sqlite3_column_int(select_stmt, 2) == stat_buf.st_size) {
+			hash = (uint64_t) strtoul((char *) sqlite3_column_text(select_stmt, 0), NULL, 16);
+		}
+		else
+		{
+			hash = gethash(argv[findex + optind], hash_algorithm);
+			snprintf(hash_buffer, 17, "%.16lx", hash);
+
+			if (select_status == SQLITE_ROW)
+			{
+				sqlite3_bind_text(update_stmt, 1, hash_buffer, -1, SQLITE_STATIC);
+				sqlite3_bind_int(update_stmt, 2, stat_buf.st_size);
+				sqlite3_bind_int(update_stmt, 3, stat_buf.st_mtim.tv_sec);
+				sqlite3_bind_text(update_stmt, 4, real_filepath, -1, SQLITE_STATIC);
+				sqlite3_bind_int(update_stmt, 5, hash_algorithm);
+
+				sqlite3_step(update_stmt);
+				sqlite3_reset(update_stmt);
+			}
+			else
+			{
+				sqlite3_bind_text(insert_stmt, 1, real_filepath, -1, SQLITE_STATIC);
+				sqlite3_bind_int(insert_stmt, 2, hash_algorithm);
+				sqlite3_bind_text(insert_stmt, 3, hash_buffer, -1, SQLITE_STATIC);
+				sqlite3_bind_int(insert_stmt, 4, stat_buf.st_size);
+				sqlite3_bind_int(insert_stmt, 5, stat_buf.st_mtim.tv_sec);
+
+				sqlite3_step(insert_stmt);
+				sqlite3_reset(insert_stmt);
+			}
+		}
+
+		sqlite3_reset(select_stmt);
+
+		free(real_filepath);
 
 		if (hash == 0xFFFFFFFFFFFFFFFF) {
 			continue;
@@ -116,7 +217,8 @@ int main(int argc, char **argv)
 		if (head == NULL)
 		{
 			hashes = (hashf *) malloc(sizeof(*hashes));
-			if (!hashes) {
+			if (!hashes)
+			{
 				fprintf(stderr, "ERROR: Failed to allocate memory.\n");
 				exit(1);
 			}
@@ -126,7 +228,8 @@ int main(int argc, char **argv)
 		else
 		{
 			hashes->next = (hashf *) malloc(sizeof(*hashes));
-			if (!hashes->next) {
+			if (!hashes->next)
+			{
 				fprintf(stderr, "ERROR: Failed to allocate memory.\n");
 				exit(1);
 			}
@@ -134,14 +237,18 @@ int main(int argc, char **argv)
 			hashes->next = NULL;
 		}
 
-		strncpy(hashes->filename, argv[findex + optind], FILENAME_MAX - 1);
+		strncpy(hashes->filename, argv[findex + optind], PATH_MAX - 1);
 		hashes->hash = hash;
+
 
 		if (print_hashes) {
 			printf("%s: %.*lx\n", hashes->filename, HASHLENGTH / 4, hashes->hash);
 		}
 	}
 
+	sqlite3_finalize(select_stmt);
+	sqlite3_finalize(insert_stmt);
+	sqlite3_finalize(update_stmt);
 	hashes = head;
 
 	while(hashes != NULL)
@@ -160,6 +267,8 @@ int main(int argc, char **argv)
 		hashes = hashes->next;
 		free(x);
 	}
+
+	sqlite3_close(db);
 
 	return 0;
 }

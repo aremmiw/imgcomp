@@ -1,5 +1,5 @@
 # imgcomp
-Lightweight program for image perpetual hashing using aHash/dHash/pHash.
+Lightweight program for image perceptual hashing using aHash/dHash/pHash.
 The hashes are unsigned 64-bit integers.
 
 The main use of this program is to find images that are similar to one another,

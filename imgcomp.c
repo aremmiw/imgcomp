@@ -447,16 +447,13 @@ bool check_extension(char *filename)
 {
 	static int ext_count = sizeof(extensions) / sizeof(*extensions);
 	const char *file_ext = strrchr(filename, '.');
-	int ext_length;
 
 	if (file_ext == NULL) {
 		return false;
 	}
 
-	for (int i = 0; i < ext_count; i++)
-	{
-		ext_length = strlen(extensions[i]);
-		if (strncmp(file_ext, extensions[i], ext_length) == 0) {
+	for (int i = 0; i < ext_count; i++) {
+		if (strcasecmp(file_ext, extensions[i]) == 0) {
 			return true;
 		}
 	}

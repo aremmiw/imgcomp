@@ -40,6 +40,7 @@ void phash(MagickWand **mw, uint64_t *hash);
 int hammdist(uint64_t a, uint64_t b);
 
 bool check_extension(char *filename);
+void exit_with_error(char *message);
 
 enum hash_algorithms {AHASH, DHASH, PHASH};
 char *extensions[] = {".jpeg", ".jpg", ".png", ".gif", ".tiff", ".tif", ".webp", ".jxl", ".bmp", ".avif"};
@@ -84,18 +85,15 @@ int main(int argc, char **argv)
 				break;
 			case 't':
 				tolerance = atoi(optarg);
-				if (tolerance != 0 && (0 > tolerance || tolerance > 64 || strlen(optarg) != floor(log10(abs(tolerance))) + 1))
-				{
-					fprintf(stderr, "Invalid use of --tolerance, run '%s --help' for usage info.\n", PROGRAM_NAME);
-					exit(1);
+				if (tolerance != 0 && (0 > tolerance || tolerance > 64 || strlen(optarg) != floor(log10(abs(tolerance))) + 1)) {
+					exit_with_error("Invalid use of --tolerance, run '" PROGRAM_NAME " --help' for usage info.\n");
 				}
 				break;
 			case 'h':
 				usage();
 				break;
 			default:
-				fprintf(stderr, "Run '%s --help' for usage info.\n", PROGRAM_NAME);
-				exit(1);
+				exit_with_error("Run '" PROGRAM_NAME " --help' for usage info.\n");
 				break;
 		}
 	}
@@ -114,10 +112,16 @@ int main(int argc, char **argv)
 		strncpy(dbpath, getenv("HOME"), PATH_MAX - 25);
 		strcat(dbpath, "/.cache");
 	}
-	else
-	{
-		fprintf(stderr, "Check that $HOME or $XDG_CACHE_HOME is set\n");
-		exit(1);
+	else {
+		exit_with_error("Check that $HOME or $XDG_CACHE_HOME is set\n");
+	}
+
+	struct stat cache_dirst;
+	if (stat(dbpath, &cache_dirst) != 0 && errno == ENOENT) {
+		mkdir(dbpath, 0755);
+	}
+	else if (stat(dbpath, &cache_dirst) != 0 || (cache_dirst.st_mode & S_IFMT) != S_IFDIR) {
+		exit_with_error("Can't access cache directory.\n");
 	}
 
 	strcat(dbpath, "/" PROGRAM_NAME ".sqlite");
@@ -218,10 +222,8 @@ int main(int argc, char **argv)
 		if (head == NULL)
 		{
 			hashes = (hashf *) malloc(sizeof(*hashes));
-			if (!hashes)
-			{
-				fprintf(stderr, "ERROR: Failed to allocate memory.\n");
-				exit(1);
+			if (!hashes) {
+				exit_with_error("ERROR: Failed to allocate memory.\n");
 			}
 			head = hashes;
 			hashes->next = NULL;
@@ -229,10 +231,8 @@ int main(int argc, char **argv)
 		else
 		{
 			hashes->next = (hashf *) malloc(sizeof(*hashes));
-			if (!hashes->next)
-			{
-				fprintf(stderr, "ERROR: Failed to allocate memory.\n");
-				exit(1);
+			if (!hashes->next) {
+				exit_with_error("ERROR: Failed to allocate memory.\n");
 			}
 			hashes = hashes->next;
 			hashes->next = NULL;
@@ -459,4 +459,10 @@ bool check_extension(char *filename)
 	}
 
 	return false;
+}
+
+void exit_with_error(char *message)
+{
+	fprintf(stderr, "%s", message);
+	exit(1);
 }

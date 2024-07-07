@@ -219,32 +219,23 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		if (head == NULL)
-		{
-			hashes = (hashf *) malloc(sizeof(*hashes));
-			if (!hashes) {
-				exit_with_error("ERROR: Failed to allocate memory.\n");
-			}
+		hashes = (hashf *) malloc(sizeof(*hashes));
+		if (!hashes) {
+			exit_with_error("ERROR: Failed to allocate memory.\n");
+		}
+		if (head == NULL) {
 			head = hashes;
-			hashes->next = NULL;
 		}
-		else
-		{
-			hashes->next = (hashf *) malloc(sizeof(*hashes));
-			if (!hashes->next) {
-				exit_with_error("ERROR: Failed to allocate memory.\n");
-			}
-			hashes = hashes->next;
-			hashes->next = NULL;
-		}
+		hashes->next = NULL;
 
 		strncpy(hashes->filename, argv[findex + optind], PATH_MAX - 1);
 		hashes->hash = hash;
 
-
 		if (print_hashes) {
 			printf("%s: %.*lx\n", hashes->filename, HASHLENGTH / 4, hashes->hash);
 		}
+
+		hashes = hashes->next;
 	}
 
 	sqlite3_finalize(select_stmt);

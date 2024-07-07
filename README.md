@@ -31,7 +31,7 @@ Other options:
 ```
 
 ## dependencies
-* ImageMagick 6 or 7 (including libraries)
+* ImageMagick 6 or 7 (including MagickWand)
 * sqlite3
 * gcc
 * make

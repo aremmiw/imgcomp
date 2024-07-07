@@ -41,10 +41,12 @@ int hammdist(uint64_t a, uint64_t b);
 
 bool check_extension(char *filename);
 void exit_with_error(char *message);
+void init_sqlitedb(sqlite3 **dbp);
+void ll_alloc();
+void compare_hashes(int tolerance);
 
 enum hash_algorithms {AHASH, DHASH, PHASH};
 char *extensions[] = {".jpeg", ".jpg", ".png", ".gif", ".tiff", ".tif", ".webp", ".jxl", ".bmp", ".avif"};
-
 hashf *hashes = NULL;
 hashf *head = NULL;
 
@@ -54,7 +56,6 @@ int main(int argc, char **argv)
 	int tolerance = 5;
 	int hash_algorithm = DHASH;
 	bool print_hashes = false;
-	char dbpath[PATH_MAX];
 	sqlite3 *db;
 
 	static struct option const longopts[] =
@@ -105,54 +106,9 @@ int main(int argc, char **argv)
 		usage();
 	}
 
-	if (getenv("XDG_CACHE_HOME")) {
-		strncpy(dbpath, getenv("XDG_CACHE_HOME"), PATH_MAX - 25);
-	}
-	else if (getenv("HOME"))
-	{
-		strncpy(dbpath, getenv("HOME"), PATH_MAX - 25);
-		strcat(dbpath, "/.cache");
-	}
-	else {
-		exit_with_error("Check that $HOME or $XDG_CACHE_HOME is set\n");
-	}
+	init_sqlitedb(&db);
 
-	struct stat cache_dirst;
-	if (stat(dbpath, &cache_dirst) != 0 && errno == ENOENT) {
-		mkdir(dbpath, 0755);
-	}
-	else if (stat(dbpath, &cache_dirst) != 0 || (cache_dirst.st_mode & S_IFMT) != S_IFDIR) {
-		exit_with_error("Can't access cache directory.\n");
-	}
-
-	strcat(dbpath, "/" PROGRAM_NAME ".sqlite");
-
-	if (sqlite3_open(dbpath, &db) != SQLITE_OK)
-	{
-		fprintf(stderr, "Failed to open the database file: %s\n", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		exit(1);
-	}
-	else
-	{
-		char *init_db = "CREATE TABLE IF NOT EXISTS hashes(id INTEGER PRIMARY KEY, filename TEXT, hashtype INT, hash TEXT, filesize INT, mtime INT);";
-		char *errmsg = NULL;
-
-		if (sqlite3_exec(db, init_db, 0, 0, &errmsg) != SQLITE_OK)
-		{
-			fprintf(stderr, "SQL error: %s\n", errmsg);
-			sqlite3_free(errmsg);
-			sqlite3_close(db);
-			exit(1);
-		}
-		else
-		{
-			sqlite3_exec(db, "PRAGMA synchronous = OFF;", 0, 0, &errmsg);
-			sqlite3_exec(db, "PRAGMA journal_mode = MEMORY;", 0, 0, &errmsg);
-		}
-	}
-
-	sqlite3_stmt *insert_stmt, *select_stmt, *update_stmt;
+	sqlite3_stmt *select_stmt, *insert_stmt, *update_stmt;
 	sqlite3_prepare_v2(db, "INSERT INTO hashes (id, filename, hashtype, hash, filesize, mtime) VALUES(NULL, ?1, ?2, ?3, ?4, ?5);", -1, &insert_stmt, 0);
 	sqlite3_prepare_v2(db, "SELECT hash, mtime, filesize FROM hashes WHERE filename=?1 AND hashtype=?2", -1, &select_stmt, 0);
 	sqlite3_prepare_v2(db, "UPDATE hashes SET hash=?1, filesize=?2, mtime=?3 WHERE filename=?4 AND hashtype=?5;", -1, &update_stmt, 0);
@@ -227,14 +183,7 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		hashes = (hashf *) malloc(sizeof(*hashes));
-		if (!hashes) {
-			exit_with_error("Failed to allocate memory.\n");
-		}
-		if (head == NULL) {
-			head = hashes;
-		}
-		hashes->next = NULL;
+		ll_alloc();
 
 		strncpy(hashes->filename, argv[findex + optind], PATH_MAX - 1);
 		hashes->hash = hash;
@@ -243,33 +192,14 @@ int main(int argc, char **argv)
 			printf("%s: %.*lx\n", hashes->filename, HASHLENGTH / 4, hashes->hash);
 		}
 
-		hashes = hashes->next;
 	}
 
 	sqlite3_finalize(select_stmt);
 	sqlite3_finalize(insert_stmt);
 	sqlite3_finalize(update_stmt);
-	hashes = head;
-
-	while(hashes != NULL)
-	{
-		hashf *x = hashes;
-		hashf *y = x->next;
-		while (y != NULL)
-		{
-			int hashdist = hammdist(x->hash, y->hash);
-			if (hashdist < tolerance) {
-				printf("%s and %s are similar with a dist of %d\n",
-				x->filename, y->filename, hashdist);
-			}
-			y = y->next;
-		}
-		hashes = hashes->next;
-		free(x);
-		x = NULL;
-	}
-
 	sqlite3_close(db);
+
+	compare_hashes(tolerance);
 
 	return 0;
 }
@@ -465,13 +395,107 @@ void exit_with_error(char *message)
 {
 	fprintf(stderr, "ERROR: %s\n", message);
 
-	hashf *x = head ? head : hashes;
-
-	while (x) {
-		hashf *y = x->next;
-		free(x);
-		x = y;
+	while (head) {
+		hashf *x = head->next;
+		free(head);
+		head = x;
 	}
 
 	exit(1);
+}
+
+void init_sqlitedb(sqlite3 **dbp)
+{
+	char dbpath[PATH_MAX];
+	struct stat cache_dirst;
+
+	if (getenv("XDG_CACHE_HOME")) {
+		strncpy(dbpath, getenv("XDG_CACHE_HOME"), PATH_MAX - 25);
+	}
+	else if (getenv("HOME"))
+	{
+		strncpy(dbpath, getenv("HOME"), PATH_MAX - 25);
+		strcat(dbpath, "/.cache");
+	}
+	else {
+		exit_with_error("Check that $HOME or $XDG_CACHE_HOME is set\n");
+	}
+
+	if (stat(dbpath, &cache_dirst) != 0 && errno == ENOENT) {
+		mkdir(dbpath, 0755);
+	}
+	else if (stat(dbpath, &cache_dirst) != 0 || (cache_dirst.st_mode & S_IFMT) != S_IFDIR) {
+		exit_with_error("Can't access cache directory.\n");
+	}
+
+	strcat(dbpath, "/" PROGRAM_NAME ".sqlite");
+
+	if (sqlite3_open(dbpath, dbp) != SQLITE_OK)
+	{
+		fprintf(stderr, "ERROR: %s\n", sqlite3_errmsg(*dbp));
+		sqlite3_close(*dbp);
+		exit(1);
+	}
+	else
+	{
+		char *init_db = "CREATE TABLE IF NOT EXISTS hashes(id INTEGER PRIMARY KEY, filename TEXT, hashtype INT, hash TEXT, filesize INT, mtime INT);";
+		char *errmsg = NULL;
+
+		if (sqlite3_exec(*dbp, init_db, 0, 0, &errmsg) != SQLITE_OK)
+		{
+			fprintf(stderr, "ERROR: %s\n", errmsg);
+			sqlite3_free(errmsg);
+			sqlite3_close(*dbp);
+			exit(1);
+		}
+		else
+		{
+			sqlite3_exec(*dbp, "PRAGMA synchronous = OFF;", 0, 0, &errmsg);
+			sqlite3_exec(*dbp, "PRAGMA journal_mode = MEMORY;", 0, 0, &errmsg);
+		}
+	}
+
+}
+
+void ll_alloc()
+{
+	if (head == NULL)
+	{
+		hashes = (hashf *) malloc(sizeof(*hashes));
+		if (!hashes) {
+			exit_with_error("ERROR: Failed to allocate memory.\n");
+		}
+		head = hashes;
+		hashes->next = NULL;
+	}
+	else
+	{
+		hashes->next = (hashf *) malloc(sizeof(*hashes));
+		if (!hashes->next) {
+			exit_with_error("ERROR: Failed to allocate memory.\n");
+		}
+		hashes = hashes->next;
+		hashes->next = NULL;
+	}
+}
+
+void compare_hashes(int tolerance)
+{
+	while (head != NULL)
+	{
+		hashf *x = head;
+		hashf *y = x->next;
+		while (y != NULL)
+		{
+			int hashdist = hammdist(x->hash, y->hash);
+			if (hashdist < tolerance) {
+				printf("%s and %s are similar with a dist of %d\n",
+				x->filename, y->filename, hashdist);
+			}
+			y = y->next;
+		}
+		head = head->next;
+		free(x);
+		x = NULL;
+	}
 }

@@ -45,10 +45,11 @@ void exit_with_error(char *message);
 enum hash_algorithms {AHASH, DHASH, PHASH};
 char *extensions[] = {".jpeg", ".jpg", ".png", ".gif", ".tiff", ".tif", ".webp", ".jxl", ".bmp", ".avif"};
 
+hashf *hashes = NULL;
+hashf *head = NULL;
+
 int main(int argc, char **argv)
 {
-	hashf *hashes = NULL;
-	hashf *head = NULL;
 	int files, optc;
 	int tolerance = 5;
 	int hash_algorithm = DHASH;
@@ -160,7 +161,7 @@ int main(int argc, char **argv)
 	{
 		char hash_buffer[17] = {0};
 		uint64_t hash;
-		int select_status;
+		int statement_status;
 		struct stat stat_buf;
 
 		if (stat(argv[findex + optind], &stat_buf) == -1
@@ -175,19 +176,22 @@ int main(int argc, char **argv)
 		sqlite3_bind_text(select_stmt, 1, real_filepath, -1, SQLITE_STATIC);
 		sqlite3_bind_int(select_stmt, 2, hash_algorithm);
 
-		select_status = sqlite3_step(select_stmt);
+		statement_status = sqlite3_step(select_stmt);
 
-		if (select_status == SQLITE_ROW
+		if (statement_status == SQLITE_ROW
 		    && (int64_t) strtoul((char *) sqlite3_column_text(select_stmt, 1), NULL, 10) == stat_buf.st_mtim.tv_sec
 		    && sqlite3_column_int(select_stmt, 2) == stat_buf.st_size) {
 			hash = (uint64_t) strtoul((char *) sqlite3_column_text(select_stmt, 0), NULL, 16);
+		}
+		else if (statement_status == SQLITE_ERROR) {
+			exit_with_error((char *)sqlite3_errmsg(db));
 		}
 		else
 		{
 			hash = gethash(argv[findex + optind], hash_algorithm);
 			snprintf(hash_buffer, 17, "%.16lx", hash);
 
-			if (select_status == SQLITE_ROW)
+			if (statement_status == SQLITE_ROW)
 			{
 				sqlite3_bind_text(update_stmt, 1, hash_buffer, -1, SQLITE_STATIC);
 				sqlite3_bind_int(update_stmt, 2, stat_buf.st_size);
@@ -196,7 +200,7 @@ int main(int argc, char **argv)
 				sqlite3_bind_int(update_stmt, 5, hash_algorithm);
 
 				sqlite3_step(update_stmt);
-				sqlite3_reset(update_stmt);
+				statement_status = sqlite3_reset(update_stmt);
 			}
 			else
 			{
@@ -207,7 +211,11 @@ int main(int argc, char **argv)
 				sqlite3_bind_int(insert_stmt, 5, stat_buf.st_mtim.tv_sec);
 
 				sqlite3_step(insert_stmt);
-				sqlite3_reset(insert_stmt);
+				statement_status = sqlite3_reset(insert_stmt);
+			}
+
+			if (statement_status != SQLITE_OK) {
+				exit_with_error((char *)sqlite3_errmsg(db));
 			}
 		}
 
@@ -221,7 +229,7 @@ int main(int argc, char **argv)
 
 		hashes = (hashf *) malloc(sizeof(*hashes));
 		if (!hashes) {
-			exit_with_error("ERROR: Failed to allocate memory.\n");
+			exit_with_error("Failed to allocate memory.\n");
 		}
 		if (head == NULL) {
 			head = hashes;
@@ -258,6 +266,7 @@ int main(int argc, char **argv)
 		}
 		hashes = hashes->next;
 		free(x);
+		x = NULL;
 	}
 
 	sqlite3_close(db);
@@ -454,6 +463,15 @@ bool check_extension(char *filename)
 
 void exit_with_error(char *message)
 {
-	fprintf(stderr, "%s", message);
+	fprintf(stderr, "ERROR: %s\n", message);
+
+	hashf *x = head ? head : hashes;
+
+	while (x) {
+		hashf *y = x->next;
+		free(x);
+		x = y;
+	}
+
 	exit(1);
 }

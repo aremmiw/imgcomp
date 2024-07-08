@@ -36,3 +36,6 @@ Other options:
 * gcc
 * make
 * pkg-config
+
+## building
+Run `make` which will output an executable `imgcomp`.

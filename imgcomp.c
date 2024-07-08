@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 			hash = (uint64_t) strtoul((char *) sqlite3_column_text(select_stmt, 0), NULL, 16);
 		}
 		else if (statement_status == SQLITE_ERROR) {
-			exit_with_error((char *)sqlite3_errmsg(db));
+			exit_with_error((char *) sqlite3_errmsg(db));
 		}
 		else
 		{
@@ -171,7 +171,7 @@ int main(int argc, char **argv)
 			}
 
 			if (statement_status != SQLITE_OK) {
-				exit_with_error((char *)sqlite3_errmsg(db));
+				exit_with_error((char *) sqlite3_errmsg(db));
 			}
 		}
 

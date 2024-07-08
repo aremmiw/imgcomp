@@ -119,11 +119,22 @@ int main(int argc, char **argv)
 		uint64_t hash;
 		struct stat stat_buf;
 
-		if (stat(argv[findex + optind], &stat_buf) == -1
-		    || (stat_buf.st_mode & S_IFMT) != S_IFREG
-		    || strlen(argv[findex + optind]) > PATH_MAX
-		    || !check_extension(argv[findex + optind])) {
+		if (stat(argv[findex + optind], &stat_buf) == -1) {
 			continue;
+		}
+		switch (stat_buf.st_mode & S_IFMT)
+		{
+			case S_IFREG:
+				if (strlen(argv[findex + optind]) > PATH_MAX || !check_extension(argv[findex + optind])) {
+					continue;
+				}
+				break;
+			case S_IFDIR: /* TODO: add this */
+				continue;
+				break;
+			default:
+				continue;
+				break;
 		}
 
 		hash = check_hash(argv[findex + optind], db, stmts, stat_buf, hash_algorithm);

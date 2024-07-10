@@ -1,8 +1,12 @@
+#define _XOPEN_SOURCE 700
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <math.h>
@@ -42,7 +46,7 @@ int hammdist(uint64_t a, uint64_t b);
 bool check_extension(char *filename);
 void exit_with_error(char *message);
 void init_sqlitedb(sqlite3 **dbp);
-void ll_alloc();
+void ll_alloc(void);
 void compare_hashes(int tolerance);
 uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct stat stat_buf, int hash_algorithm);
 
@@ -417,7 +421,7 @@ void init_sqlitedb(sqlite3 **dbp)
 
 }
 
-void ll_alloc()
+void ll_alloc(void)
 {
 	if (head == NULL)
 	{
@@ -465,7 +469,7 @@ uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct st
 	char hash_buffer[17] = {0};
 	char *real_filepath = realpath(filename, NULL);
 	int statement_status;
-	uint64_t hash;
+	uint64_t hash = 0;
 
 	sqlite3_bind_text(stmts[0], 1, real_filepath, -1, SQLITE_STATIC);
 	sqlite3_bind_int(stmts[0], 2, hash_algorithm);

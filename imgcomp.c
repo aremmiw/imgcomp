@@ -28,16 +28,23 @@
    Hanning Hermite Lanczos Mitchell Point Quadratic Sinc Triangle */
 #define SCALER HermiteFilter
 
-typedef struct hashf
+typedef struct Hashf
 {
 	uint64_t hash;
 	char filename[PATH_MAX];
-	struct hashf *next;
-} hashf;
+	struct Hashf *next;
+} Hashf;
+
+typedef struct Copts
+{
+	int tolerance;
+	int hash_algorithm;
+	bool print_hashes;
+} Copts;
 
 void usage(void);
 
-uint64_t gethash(char *filename, int hash_algorithm);
+uint64_t get_hash(char *filename, int hash_algorithm);
 void ahash(MagickWand **mw, uint64_t *hash);
 void dhash(MagickWand **mw, uint64_t *hash);
 void phash(MagickWand **mw, uint64_t *hash);
@@ -47,20 +54,19 @@ bool check_extension(char *filename);
 void exit_with_error(char *message);
 void init_sqlitedb(sqlite3 **dbp);
 void ll_alloc(void);
-void compare_hashes(int tolerance);
-uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct stat stat_buf, int hash_algorithm);
+void compare_hashes(Copts options);
+uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct stat stat_buf, Copts options);
+void add_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, Copts options);
 
 enum hash_algorithms {AHASH, DHASH, PHASH};
 char *extensions[] = {".jpeg", ".jpg", ".png", ".gif", ".tiff", ".tif", ".webp", ".jxl", ".bmp", ".avif"};
-hashf *hashes = NULL;
-hashf *head = NULL;
+Hashf *hashes = NULL;
+Hashf *head = NULL;
 
 int main(int argc, char **argv)
 {
 	int files, optc;
-	int tolerance = 5;
-	int hash_algorithm = DHASH;
-	bool print_hashes = false;
+	Copts options = {.tolerance = 5, .hash_algorithm = DHASH, .print_hashes = false};
 	sqlite3 *db;
 
 	static struct option const longopts[] =
@@ -79,20 +85,20 @@ int main(int argc, char **argv)
 		switch (optc)
 		{
 			case 'a':
-				hash_algorithm = AHASH;
+				options.hash_algorithm = AHASH;
 				break;
 			case 'd':
-				hash_algorithm = DHASH;
+				options.hash_algorithm = DHASH;
 				break;
 			case 'p':
-				hash_algorithm = PHASH;
+				options.hash_algorithm = PHASH;
 				break;
 			case 's':
-				print_hashes = true;
+				options.print_hashes = true;
 				break;
 			case 't':
-				tolerance = atoi(optarg);
-				if (tolerance != 0 && (0 > tolerance || tolerance > 64 || strlen(optarg) != floor(log10(abs(tolerance))) + 1)) {
+				options.tolerance = atoi(optarg);
+				if (options.tolerance != 0 && (0 > options.tolerance || options.tolerance > 64 || strlen(optarg) != floor(log10(abs(options.tolerance))) + 1)) {
 					exit_with_error("Invalid use of --tolerance, run '" PROGRAM_NAME " --help' for usage info.\n");
 				}
 				break;
@@ -120,7 +126,6 @@ int main(int argc, char **argv)
 
 	for (int findex = 0; findex < files; findex++)
 	{
-		uint64_t hash;
 		struct stat stat_buf;
 
 		if (stat(argv[findex + optind], &stat_buf) == -1) {
@@ -132,6 +137,7 @@ int main(int argc, char **argv)
 				if (strlen(argv[findex + optind]) > PATH_MAX || !check_extension(argv[findex + optind])) {
 					continue;
 				}
+				add_hash(argv[findex + optind], db, stmts, options);
 				break;
 			case S_IFDIR: /* TODO: add this */
 				continue;
@@ -140,22 +146,6 @@ int main(int argc, char **argv)
 				continue;
 				break;
 		}
-
-		hash = check_hash(argv[findex + optind], db, stmts, stat_buf, hash_algorithm);
-
-		if (hash == 0xFFFFFFFFFFFFFFFF) {
-			continue;
-		}
-
-		ll_alloc();
-
-		strncpy(hashes->filename, argv[findex + optind], PATH_MAX - 1);
-		hashes->hash = hash;
-
-		if (print_hashes) {
-			printf("%s: %.*lx\n", hashes->filename, HASHLENGTH / 4, hashes->hash);
-		}
-
 	}
 
 	sqlite3_finalize(stmts[0]);
@@ -163,7 +153,7 @@ int main(int argc, char **argv)
 	sqlite3_finalize(stmts[2]);
 	sqlite3_close(db);
 
-	compare_hashes(tolerance);
+	compare_hashes(options);
 
 	return 0;
 }
@@ -185,7 +175,7 @@ void usage(void)
 	exit(0);
 }
 
-uint64_t gethash(char *filename, int hash_algorithm)
+uint64_t get_hash(char *filename, int hash_algorithm)
 {
 	MagickWand *mw;
 	uint64_t hash = 0;
@@ -360,7 +350,7 @@ void exit_with_error(char *message)
 	fprintf(stderr, "ERROR: %s\n", message);
 
 	while (head) {
-		hashf *x = head->next;
+		Hashf *x = head->next;
 		free(head);
 		head = x;
 	}
@@ -425,7 +415,7 @@ void ll_alloc(void)
 {
 	if (head == NULL)
 	{
-		hashes = (hashf *) malloc(sizeof(*hashes));
+		hashes = (Hashf *) malloc(sizeof(*hashes));
 		if (!hashes) {
 			exit_with_error("ERROR: Failed to allocate memory.\n");
 		}
@@ -434,7 +424,7 @@ void ll_alloc(void)
 	}
 	else
 	{
-		hashes->next = (hashf *) malloc(sizeof(*hashes));
+		hashes->next = (Hashf *) malloc(sizeof(*hashes));
 		if (!hashes->next) {
 			exit_with_error("ERROR: Failed to allocate memory.\n");
 		}
@@ -443,16 +433,16 @@ void ll_alloc(void)
 	}
 }
 
-void compare_hashes(int tolerance)
+void compare_hashes(Copts options)
 {
 	while (head != NULL)
 	{
-		hashf *x = head;
-		hashf *y = x->next;
+		Hashf *x = head;
+		Hashf *y = x->next;
 		while (y != NULL)
 		{
 			int hashdist = hammdist(x->hash, y->hash);
-			if (hashdist < tolerance) {
+			if (hashdist < options.tolerance) {
 				printf("%s and %s are similar with a dist of %d\n",
 				x->filename, y->filename, hashdist);
 			}
@@ -464,7 +454,7 @@ void compare_hashes(int tolerance)
 	}
 }
 
-uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct stat stat_buf, int hash_algorithm)
+uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct stat stat_buf, Copts options)
 {
 	char hash_buffer[17] = {0};
 	char *real_filepath = realpath(filename, NULL);
@@ -472,7 +462,7 @@ uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct st
 	uint64_t hash = 0;
 
 	sqlite3_bind_text(stmts[0], 1, real_filepath, -1, SQLITE_STATIC);
-	sqlite3_bind_int(stmts[0], 2, hash_algorithm);
+	sqlite3_bind_int(stmts[0], 2, options.hash_algorithm);
 
 	statement_status = sqlite3_step(stmts[0]);
 
@@ -486,7 +476,7 @@ uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct st
 	}
 	else
 	{
-		hash = gethash(filename, hash_algorithm);
+		hash = get_hash(filename, options.hash_algorithm);
 		snprintf(hash_buffer, 17, "%.16lx", hash);
 
 		if (statement_status == SQLITE_ROW)
@@ -495,7 +485,7 @@ uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct st
 			sqlite3_bind_int(stmts[2], 2, stat_buf.st_size);
 			sqlite3_bind_int(stmts[2], 3, stat_buf.st_mtim.tv_sec);
 			sqlite3_bind_text(stmts[2], 4, real_filepath, -1, SQLITE_STATIC);
-			sqlite3_bind_int(stmts[2], 5, hash_algorithm);
+			sqlite3_bind_int(stmts[2], 5, options.hash_algorithm);
 
 			sqlite3_step(stmts[2]);
 			statement_status = sqlite3_reset(stmts[2]);
@@ -503,7 +493,7 @@ uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct st
 		else
 		{
 			sqlite3_bind_text(stmts[1], 1, real_filepath, -1, SQLITE_STATIC);
-			sqlite3_bind_int(stmts[1], 2, hash_algorithm);
+			sqlite3_bind_int(stmts[1], 2, options.hash_algorithm);
 			sqlite3_bind_text(stmts[1], 3, hash_buffer, -1, SQLITE_STATIC);
 			sqlite3_bind_int(stmts[1], 4, stat_buf.st_size);
 			sqlite3_bind_int(stmts[1], 5, stat_buf.st_mtim.tv_sec);
@@ -522,4 +512,28 @@ uint64_t check_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, struct st
 	free(real_filepath);
 
 	return hash;
+}
+
+void add_hash(char *filename, sqlite3 *db, sqlite3_stmt **stmts, Copts options)
+{
+	uint64_t hash = 0;
+	struct stat stat_file;
+
+	if (stat(filename, &stat_file) == -1) {
+		return;
+	}
+
+	hash = check_hash(filename, db, stmts, stat_file, options);
+	if (hash == 0xFFFFFFFFFFFFFFFF) {
+		return;
+	}
+
+	ll_alloc();
+
+	strncpy(hashes->filename, filename, PATH_MAX - 1);
+	hashes->hash = hash;
+
+	if (options.print_hashes) {
+		printf("%s: %.*lx\n", hashes->filename, HASHLENGTH / 4, hashes->hash);
+	}
 }

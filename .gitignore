@@ -1,3 +1,4 @@
 imgcomp
+*.o
 *.swp
 *.swo

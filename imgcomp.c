@@ -35,6 +35,8 @@ int main(int argc, char **argv)
 	};
 	sqlite3 *db;
 
+	sqlite3_stmt *stmts[STMT_TOTAL];
+
 	static struct option const longopts[] =
 	{
 		{"ahash", no_argument, NULL, 'a'},
@@ -85,10 +87,9 @@ int main(int argc, char **argv)
 
 	init_sqlitedb(&db);
 
-	sqlite3_stmt *stmts[3];
-	sqlite3_prepare_v2(db, "SELECT hash, mtime, filesize FROM hashes WHERE filepath=?1 AND hashtype=?2", -1, &stmts[0], 0);
-	sqlite3_prepare_v2(db, "UPDATE hashes SET hash=?1, filesize=?2, mtime=?3 WHERE filepath=?4 AND hashtype=?5;", -1, &stmts[1], 0);
-	sqlite3_prepare_v2(db, "INSERT INTO hashes (id, filepath, hashtype, hash, filesize, mtime) VALUES(NULL, ?1, ?2, ?3, ?4, ?5);", -1, &stmts[2], 0);
+	sqlite3_prepare_v2(db, "SELECT hash, mtime, filesize FROM hashes WHERE filepath=?1 AND hashtype=?2", -1, &stmts[SELECT_STMT], 0);
+	sqlite3_prepare_v2(db, "UPDATE hashes SET hash=?1, filesize=?2, mtime=?3 WHERE filepath=?4 AND hashtype=?5;", -1, &stmts[UPDATE_STMT], 0);
+	sqlite3_prepare_v2(db, "INSERT INTO hashes (id, filepath, hashtype, hash, filesize, mtime) VALUES(NULL, ?1, ?2, ?3, ?4, ?5);", -1, &stmts[INSERT_STMT], 0);
 
 	for (int findex = 0; findex < files; findex++)
 	{
@@ -113,9 +114,9 @@ int main(int argc, char **argv)
 		}
 	}
 
-	sqlite3_finalize(stmts[0]);
-	sqlite3_finalize(stmts[1]);
-	sqlite3_finalize(stmts[2]);
+	sqlite3_finalize(stmts[SELECT_STMT]);
+	sqlite3_finalize(stmts[UPDATE_STMT]);
+	sqlite3_finalize(stmts[INSERT_STMT]);
 	sqlite3_close(db);
 
 	compare_hashes(options);

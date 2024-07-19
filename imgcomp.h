@@ -30,4 +30,6 @@ void ll_alloc(void);
 
 extern Hashf *head, *hashes;
 
+enum sql_stmt_e {SELECT_STMT, UPDATE_STMT, INSERT_STMT, STMT_TOTAL};
+
 #endif

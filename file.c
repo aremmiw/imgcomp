@@ -40,15 +40,15 @@ static uint64_t check_hash(char *filepath, sqlite3 *db, sqlite3_stmt **stmts, st
 	int statement_status;
 	uint64_t hash = 0;
 
-	sqlite3_bind_text(stmts[0], 1, real_filepath, -1, SQLITE_STATIC);
-	sqlite3_bind_int(stmts[0], 2, options.hash_algorithm);
+	sqlite3_bind_text(stmts[SELECT_STMT], 1, real_filepath, -1, SQLITE_STATIC);
+	sqlite3_bind_int(stmts[SELECT_STMT], 2, options.hash_algorithm);
 
-	statement_status = sqlite3_step(stmts[0]);
+	statement_status = sqlite3_step(stmts[SELECT_STMT]);
 
 	if (statement_status == SQLITE_ROW
-	    && (int64_t) strtoul((char *) sqlite3_column_text(stmts[0], 1), NULL, 10) == stat_buf.st_mtim.tv_sec
-	    && sqlite3_column_int(stmts[0], 2) == stat_buf.st_size) {
-		hash = (uint64_t) strtoul((char *) sqlite3_column_text(stmts[0], 0), NULL, 16);
+	    && (int64_t) strtoul((char *) sqlite3_column_text(stmts[SELECT_STMT], 1), NULL, 10) == stat_buf.st_mtim.tv_sec
+	    && sqlite3_column_int(stmts[SELECT_STMT], 2) == stat_buf.st_size) {
+		hash = (uint64_t) strtoul((char *) sqlite3_column_text(stmts[SELECT_STMT], 0), NULL, 16);
 	}
 	else if (statement_status == SQLITE_ERROR) {
 		exit_with_error((char *) sqlite3_errmsg(db));
@@ -60,25 +60,25 @@ static uint64_t check_hash(char *filepath, sqlite3 *db, sqlite3_stmt **stmts, st
 
 		if (statement_status == SQLITE_ROW)
 		{
-			sqlite3_bind_text(stmts[1], 1, hash_buffer, -1, SQLITE_STATIC);
-			sqlite3_bind_int(stmts[1], 2, stat_buf.st_size);
-			sqlite3_bind_int(stmts[1], 3, stat_buf.st_mtim.tv_sec);
-			sqlite3_bind_text(stmts[1], 4, real_filepath, -1, SQLITE_STATIC);
-			sqlite3_bind_int(stmts[1], 5, options.hash_algorithm);
+			sqlite3_bind_text(stmts[UPDATE_STMT], 1, hash_buffer, -1, SQLITE_STATIC);
+			sqlite3_bind_int(stmts[UPDATE_STMT], 2, stat_buf.st_size);
+			sqlite3_bind_int(stmts[UPDATE_STMT], 3, stat_buf.st_mtim.tv_sec);
+			sqlite3_bind_text(stmts[UPDATE_STMT], 4, real_filepath, -1, SQLITE_STATIC);
+			sqlite3_bind_int(stmts[UPDATE_STMT], 5, options.hash_algorithm);
 
-			sqlite3_step(stmts[1]);
-			statement_status = sqlite3_reset(stmts[1]);
+			sqlite3_step(stmts[UPDATE_STMT]);
+			statement_status = sqlite3_reset(stmts[UPDATE_STMT]);
 		}
 		else
 		{
-			sqlite3_bind_text(stmts[2], 1, real_filepath, -1, SQLITE_STATIC);
-			sqlite3_bind_int(stmts[2], 2, options.hash_algorithm);
-			sqlite3_bind_text(stmts[2], 3, hash_buffer, -1, SQLITE_STATIC);
-			sqlite3_bind_int(stmts[2], 4, stat_buf.st_size);
-			sqlite3_bind_int(stmts[2], 5, stat_buf.st_mtim.tv_sec);
+			sqlite3_bind_text(stmts[INSERT_STMT], 1, real_filepath, -1, SQLITE_STATIC);
+			sqlite3_bind_int(stmts[INSERT_STMT], 2, options.hash_algorithm);
+			sqlite3_bind_text(stmts[INSERT_STMT], 3, hash_buffer, -1, SQLITE_STATIC);
+			sqlite3_bind_int(stmts[INSERT_STMT], 4, stat_buf.st_size);
+			sqlite3_bind_int(stmts[INSERT_STMT], 5, stat_buf.st_mtim.tv_sec);
 
-			sqlite3_step(stmts[2]);
-			statement_status = sqlite3_reset(stmts[2]);
+			sqlite3_step(stmts[INSERT_STMT]);
+			statement_status = sqlite3_reset(stmts[INSERT_STMT]);
 		}
 
 		if (statement_status != SQLITE_OK) {
@@ -86,7 +86,7 @@ static uint64_t check_hash(char *filepath, sqlite3 *db, sqlite3_stmt **stmts, st
 		}
 	}
 
-	sqlite3_reset(stmts[0]);
+	sqlite3_reset(stmts[SELECT_STMT]);
 
 	free(real_filepath);
 

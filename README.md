@@ -10,7 +10,7 @@ Calculated hashes are stored in an SQLite database file in `$HOME/.cache/imgcomp
 If an images mtime and filesize are unchanged and there exists a hash for the chosen hashing algorithm, then it will use the precalculated hash.
 This saves a significant amount of time for repeated uses of imgcomp.
 
-Only GNU/Linux is supported although *BSD will likely work.
+Only GNU/Linux is supported but *BSD will probably work.
 
 ## usage
 ```
@@ -33,6 +33,8 @@ Other options:
 ## dependencies
 * ImageMagick 6 or 7 (including MagickWand)
 * sqlite3
+
+### build dependencies
 * gcc
 * make
 * pkg-config

@@ -188,7 +188,7 @@ static void init_sqlitedb(sqlite3 **dbp)
 	}
 	else
 	{
-		char *init_db = "CREATE TABLE IF NOT EXISTS hashes(id INTEGER PRIMARY KEY, filepath TEXT, hashtype INT, hash TEXT, filesize INT, mtime INT);";
+		const char *init_db = "CREATE TABLE IF NOT EXISTS hashes(id INTEGER PRIMARY KEY, filepath TEXT, hashtype INT, hash TEXT, filesize INT, mtime INT);";
 		char *errmsg = NULL;
 
 		if (sqlite3_exec(*dbp, init_db, 0, 0, &errmsg) != SQLITE_OK)

@@ -12,4 +12,4 @@ imgcomp: $(objs)
 
 .PHONY: clean
 clean:
-	rm imgcomp *.o
+	rm -f imgcomp *.o
